@@ -31,7 +31,7 @@ app.use(bodyParser.json())
 
 app.post('/github', verifyPostData, function (req, res) {
 
-  fs.writeFile('body.json', req.body, function (err, data) {
+  fs.writeFile('body.json', JSON.stringify(req.body), function (err, data) {
     if (err) {
       return console.log(err);
     }
