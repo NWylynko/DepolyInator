@@ -1,5 +1,5 @@
 require('dotenv').config()
-const Git = require("nodegit");
+const exec = require('child_process').exec;
 const crypto = require('crypto')
 const express = require('express')
 const bodyParser = require('body-parser')
@@ -11,7 +11,9 @@ const secret = process.env.SERCET;
 
 const deployers = []
 
-Git.Clone(process.env.DEPLOYERS, "DEPLOYERS");
+if (!(fs.existsSync("DEPLOYERS"))) {
+  exec(`git clone ${process.env.DEPLOYERS} DEPLOYERS`, () => {process.exit();});
+}
 
 fromDir("DEPLOYERS", ".json")
   .forEach(file => {
