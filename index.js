@@ -14,15 +14,7 @@ const deployers = {}
 
 clone(process.env.DEPLOYERS, "DEPLOYERS")
 
-fromDir("DEPLOYERS", ".json")
-  .forEach(file => {
-    let data = JSON.parse(fs.readFileSync(file));
-    deployers[data.name] = data;
-  })
-
-console.log(deployers)
-
-Object.keys(deployers).forEach(key => { clone(deployers[key].repo, "DEPLOYS/" + deployers[key].name); })
+CheckAllRepos()
 
 app.post('/github', verifyPostData, function (req, res) {
 
@@ -34,10 +26,10 @@ app.post('/github', verifyPostData, function (req, res) {
 
   console.log(zen)
 
-  console.log(deployers[name])
+  console.log(`pulling and restarting ${name}`)
 
   if (html_url === process.env.DEPLOYERS) {
-    exec(`cd DEPLOYERS && git pull`, console.log);
+    exec(`cd DEPLOYERS && git pull`, CheckAllRepos);
   } else {
     exec(`cd DEPLOYS/${name} && git pull`, console.log);
   }
@@ -101,4 +93,21 @@ function clone(url, path) {
   if (!(fs.existsSync(path))) {
     exec(`git clone ${url} ${path}`, console.log);
   }
+}
+
+function cloneAll() {
+  Object.keys(deployers).forEach(key => { clone(deployers[key].repo, "DEPLOYS/" + deployers[key].name); })
+}
+
+function readAllDeploys() {
+  fromDir("DEPLOYERS", ".json")
+    .forEach(file => {
+      let data = JSON.parse(fs.readFileSync(file));
+      deployers[data.name] = data;
+    })
+}
+
+function CheckAllRepos() {
+  readAllDeploys();
+  cloneAll();
 }
