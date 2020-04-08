@@ -16,7 +16,8 @@ clone(process.env.DEPLOYERS, "DEPLOYERS")
 
 fromDir("DEPLOYERS", ".json")
   .forEach(file => {
-    deployers[deployer] = JSON.parse(fs.readFileSync(file));
+    let data = JSON.parse(fs.readFileSync(file));
+    deployers[data.name] = data;
   })
 
 console.log(deployers)
