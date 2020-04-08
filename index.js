@@ -12,7 +12,7 @@ const secret = process.env.SERCET;
 const deployers = []
 
 if (!(fs.existsSync("DEPLOYERS"))) {
-  exec(`git clone ${process.env.DEPLOYERS} DEPLOYERS`, () => {process.exit();});
+  exec(`git clone ${process.env.DEPLOYERS} DEPLOYERS`, console.log);
 }
 
 fromDir("DEPLOYERS", ".json")
