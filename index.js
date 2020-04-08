@@ -6,42 +6,42 @@ const bodyParser = require('body-parser')
 const fs = require('fs');
 const path = require('path');
 const port = process.env.PORT || 3000;
-
+const app = express()
+app.use(bodyParser.json())
 const secret = process.env.SERCET;
 
-const deployers = []
+const deployers = {}
 
-if (!(fs.existsSync("DEPLOYERS"))) {
-  exec(`git clone ${process.env.DEPLOYERS} DEPLOYERS`, console.log);
-}
+clone(process.env.DEPLOYERS, "DEPLOYERS")
 
 fromDir("DEPLOYERS", ".json")
   .forEach(file => {
-    let rawdata = fs.readFileSync(file);
-    let deployer = JSON.parse(rawdata);
-    deployers.push(deployer);
+    deployers[deployer] = JSON.parse(fs.readFileSync(file));
   })
 
 console.log(deployers)
 
-const app = express()
-app.use(bodyParser.json())
-
-
+Object.keys(deployers).forEach(key => { clone(deployers[key].repo, "DEPLOYS/" + deployers[key].name); })
 
 app.post('/github', verifyPostData, function (req, res) {
 
-  console.log(req.body.zen)
-  console.log(req.body.repository.full_name)
+  let payload = req.body
 
-  fs.writeFile('body.json', JSON.stringify(req.body), function (err, data) {
-    if (err) {
-      return console.log(err);
-    }
-    console.log(data);
-  });
+  let { zen, repository } = payload;
 
-  res.status(200).send('Request body was signed')
+  let { name, full_name, html_url } = repository;
+
+  console.log(zen)
+
+  console.log(deployers[name])
+
+  if (html_url === process.env.DEPLOYERS) {
+    exec(`cd DEPLOYERS && git pull`, console.log);
+  } else {
+    exec(`cd DEPLOYS/${name} && git pull`, console.log);
+  }
+
+  res.status(200).send('commit has been deployed')
 })
 
 app.use((err, req, res, next) => {
@@ -95,3 +95,9 @@ function fromDir(startPath, filter, callback) {
 
   return foundFiles
 };
+
+function clone(url, path) {
+  if (!(fs.existsSync(path))) {
+    exec(`git clone ${url} ${path}`, console.log);
+  }
+}
