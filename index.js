@@ -5,33 +5,36 @@ const express = require('express')
 const bodyParser = require('body-parser')
 const fs = require('fs');
 const path = require('path');
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3005;
 const app = express()
 app.use(bodyParser.json())
 const secret = process.env.SERCET;
 
-const deployers = {}
+var deploys = {}
+var ready = false
 
-clone(process.env.DEPLOYERS, "DEPLOYERS")
-
-CheckAllRepos()
+getDeployers()
+  .then(CheckAllRepos)
+  .catch(handleError);
 
 app.post('/github', verifyPostData, function (req, res) {
 
   let payload = req.body
-
   let { zen, repository } = payload;
-
   let { name, full_name, html_url } = repository;
-
+  let deploy = deploys[name]
   console.log(zen)
 
-  console.log(`pulling and restarting ${name}`)
+  console.log('pulling and restarting', name)
 
   if (html_url === process.env.DEPLOYERS) {
-    exec(`cd DEPLOYERS && git pull`, CheckAllRepos);
+    run(`cd DEPLOYERS && git pull`)
+      .then(CheckAllRepos)
+      .catch(handleError)
   } else {
-    exec(`cd DEPLOYS/${name} && git pull`, console.log);
+    run(`cd ${path} && ${deploy.stop} && git pull && ${deploy.install} && ${deploy.start}`)
+      .then(() => console.log('updated', name))
+      .catch(handleError)
   }
 
   res.status(200).send('commit has been deployed')
@@ -43,6 +46,20 @@ app.use((err, req, res, next) => {
 })
 
 app.listen(port, () => console.log('listening on', port))
+
+function CheckAllRepos() {
+  readAllDeploys()
+    .then(cloneAll)
+    .then(startNewDeploys)
+    .then(deployers => deployers.forEach(deploy => deploy.then(info => deploys[info.name] = info)))
+    .then(() => ready = true)
+    .catch(handleError);
+}
+
+
+function handleError(error) {
+  console.error('error', error)
+}
 
 function verifyPostData(req, res, next) {
 
@@ -64,50 +81,108 @@ function verifyPostData(req, res, next) {
 }
 
 
-function fromDir(startPath, filter, callback) {
+function fromDir(startPath, filter) {
 
   // https://stackoverflow.com/questions/25460574/find-files-by-extension-html-under-a-folder-in-nodejs
 
-  let foundFiles = []
+  return new Promise((resolve, reject) => {
+    try {
+      let foundFiles = []
 
-  if (!fs.existsSync(startPath)) {
-    return foundFiles;
-  }
+      if (!fs.existsSync(startPath)) {
+        resolve([])
+      }
 
-  var files = fs.readdirSync(startPath);
-  for (var i = 0; i < files.length; i++) {
-    var filename = path.join(startPath, files[i]);
-    var stat = fs.lstatSync(filename);
-    if (stat.isDirectory()) {
-      fromDir(filename, filter); //recurse
+      var files = fs.readdirSync(startPath);
+
+      for (var i = 0; i < files.length; i++) {
+
+        var filename = path.join(startPath, files[i]);
+        var stat = fs.lstatSync(filename);
+
+        if (stat.isDirectory()) {
+          fromDir(filename, filter); //recurse
+        }
+
+        else if (filename.indexOf(filter) >= 0) {
+          foundFiles.push(filename)
+        };
+      };
+
+      resolve(foundFiles)
+
+    } catch (error) {
+      reject(error)
     }
-    else if (filename.indexOf(filter) >= 0) {
-      foundFiles.push(filename)
-    };
-  };
 
-  return foundFiles
+  })
+
 };
 
-function clone(url, path) {
-  if (!(fs.existsSync(path))) {
-    exec(`git clone ${url} ${path}`, console.log);
-  }
+function getDeployers() {
+  return clone(process.env.DEPLOYERS, "DEPLOYERS")
 }
 
-function cloneAll() {
-  Object.keys(deployers).forEach(key => { clone(deployers[key].repo, "DEPLOYS/" + deployers[key].name); })
+function clone(repo, path) {
+  return new Promise((resolve, reject) => {
+    if (!(fs.existsSync(path))) {
+      run(`git clone ${repo} ${path}`)
+        .then(() => resolve({ isNew: true, path, repo }))
+        .catch(reject)
+    } else {
+      resolve({ isNew: false, path, repo });
+    }
+  })
+
+}
+
+function cloneAll(deployers) {
+  return Object.keys(deployers).map(key => { return { promise: clone(deployers[key].repo, "DEPLOYS/" + deployers[key].name), json: deployers[key] } })
 }
 
 function readAllDeploys() {
-  fromDir("DEPLOYERS", ".json")
-    .forEach(file => {
-      let data = JSON.parse(fs.readFileSync(file));
-      deployers[data.name] = data;
-    })
+  return new Promise((resolve, reject) => {
+
+    let deployers = {}
+
+    try {
+      fromDir("DEPLOYERS", ".json")
+        .then(files => {
+          files.forEach(file => {
+            let data = JSON.parse(fs.readFileSync(file));
+            deployers[data.name] = data;
+          })
+          resolve(deployers);
+        }).catch(reject)
+    } catch (error) {
+      reject(error)
+    }
+  })
+
 }
 
-function CheckAllRepos() {
-  readAllDeploys();
-  cloneAll();
+function startNewDeploys(deployers) {
+  return deployers.map(deploy =>
+    deploy.promise.then(info => {
+      if (info.isNew) { return startNewDeploy({ ...info, ...deploy.json }) }
+      else { return { ...info, ...deploy.json, isRunning: true } }
+    })
+  )
+}
+
+function startNewDeploy(deploy) {
+  return new Promise((resolve, reject) => {
+    run(`cd ${deploy.path} && ${deploy.install} && ${deploy.create}`)
+      .then(() => resolve({ ...deploy, isRunning: true }))
+      .catch(reject)
+  })
+
+}
+
+function run(cmd) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, console.log)
+      .on("exit", resolve)
+      .on("error", reject);
+  })
 }
