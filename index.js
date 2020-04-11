@@ -126,7 +126,7 @@ function getDeployers() {
 function clone(repo, path) {
   return new Promise((resolve, reject) => {
     if (!(fs.existsSync(path))) {
-      run('/', `git clone ${repo} ${path}`)
+      run('./', `git clone ${repo} ${path}`)
         .then(() => resolve({ isNew: true, path, repo }))
         .catch(reject)
     } else {
