@@ -28,11 +28,11 @@ app.post('/github', verifyPostData, function (req, res) {
   console.log('pulling and restarting', name)
 
   if (html_url === process.env.DEPLOYERS) {
-    run(`cd DEPLOYERS && git pull`)
+    run('DEPLOYERS/', `git pull`)
       .then(CheckAllRepos)
       .catch(handleError)
   } else {
-    run(`cd ${path} && ${deploy.stop} && git pull && ${deploy.install} && ${deploy.start}`)
+    run(deploy.path, `${deploy.stop} && git pull && ${deploy.install} && ${deploy.start}`)
       .then(() => console.log('updated', name))
       .catch(handleError)
   }
@@ -126,7 +126,7 @@ function getDeployers() {
 function clone(repo, path) {
   return new Promise((resolve, reject) => {
     if (!(fs.existsSync(path))) {
-      run(`git clone ${repo} ${path}`)
+      run('/', `git clone ${repo} ${path}`)
         .then(() => resolve({ isNew: true, path, repo }))
         .catch(reject)
     } else {
@@ -172,16 +172,16 @@ function startNewDeploys(deployers) {
 
 function startNewDeploy(deploy) {
   return new Promise((resolve, reject) => {
-    run(`cd ${deploy.path} && ${deploy.install} && ${deploy.create}`)
+    run(deploy.path, `${deploy.install} && ${deploy.create}`)
       .then(() => resolve({ ...deploy, isRunning: true }))
       .catch(reject)
   })
 
 }
 
-function run(cmd) {
+function run(path, cmd) {
   return new Promise((resolve, reject) => {
-    exec(cmd, console.log)
+    exec(cmd, { cwd: path },  console.log)
       .on("exit", resolve)
       .on("error", reject);
   })
