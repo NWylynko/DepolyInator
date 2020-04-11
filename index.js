@@ -20,24 +20,27 @@ getDeployers()
 app.post('/github', verifyPostData, function (req, res) {
 
   let payload = req.body
-  let { zen, repository } = payload;
+  let { ref, repository } = payload;
   let { name, full_name, html_url } = repository;
   let deploy = deploys[name]
-  console.log(zen)
+  console.log(ref)
+  
+  if (isValidPush(ref.split('/')[2], deploy.trigger)) {
+    console.log('pulling and restarting', name)
 
-  console.log('pulling and restarting', name)
-
-  if (html_url === process.env.DEPLOYERS) {
-    run('DEPLOYERS/', `git pull`)
-      .then(CheckAllRepos)
-      .catch(handleError)
+    if (html_url === process.env.DEPLOYERS) {
+      run('DEPLOYERS/', `git pull`)
+        .then(CheckAllRepos)
+        .catch(error => { handleError(error); res.status(500).send(error)})
+    } else {
+      run(deploy.path, `${deploy.stop} && git pull && ${deploy.install} && ${deploy.start}`)
+        .then(() => console.log('updated', name))
+        .catch(error => { handleError(error); res.status(500).send(error)})
+    }
   } else {
-    run(deploy.path, `${deploy.stop} && git pull && ${deploy.install} && ${deploy.start}`)
-      .then(() => console.log('updated', name))
-      .catch(handleError)
+    res.status(500).send('commit isnt to trigger branch')
   }
-
-  res.status(200).send('commit has been deployed')
+  
 })
 
 app.use((err, req, res, next) => {
@@ -46,6 +49,13 @@ app.use((err, req, res, next) => {
 })
 
 app.listen(port, () => console.log('listening on', port))
+
+function isValidPush(branch, trigger) {
+  if (branch === trigger || trigger === '*' || trigger === 'all') {
+    return true
+  }
+  return false
+}
 
 function CheckAllRepos() {
   readAllDeploys()
