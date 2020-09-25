@@ -19,38 +19,41 @@ getDeployers()
 
 app.post('/github', verifyPostData, function (req, res) {
 
-  let payload = req.body
-  let { ref, repository } = payload;
-  let { name, full_name, html_url } = repository;
-  let deploy = deploys[name]
-  branch = ref.split('/')[2]
+  if (ready) {
+    
+    let payload = req.body
+    let { ref, repository } = payload;
+    let { name, full_name, html_url } = repository;
+    let deploy = deploys[name]
+    branch = ref.split('/')[2]
 
-  console.log(full_name)
+    console.log(full_name)
 
-  if (html_url === process.env.DEPLOYERS) {
-    if (isValidPush(branch, 'master')) {
-      run('DEPLOYERS/', `git pull`)
-        .then(() => res.status(200).send('updated from latest commit'))
-        .then(CheckAllRepos)
-        .catch(error => { handleError(error); res.status(500).send(error) })
+    if (html_url === process.env.DEPLOYERS) {
+      if (isValidPush(branch, 'master')) {
+        run('DEPLOYERS/', `git pull`)
+          .then(() => res.status(200).send('updated from latest commit'))
+          .then(CheckAllRepos)
+          .catch(error => { handleError(error); res.status(500).send(error) })
+      } else {
+        res.status(500).send('commit isnt to trigger branch')
+      }
     } else {
-      res.status(500).send('commit isnt to trigger branch')
+
+      if (isValidPush(branch, deploy.trigger)) {
+
+        console.log('pulling and restarting', name)
+
+        run(deploy.path, `${deploy.stop} && git pull && ${deploy.install} && ${deploy.start}`)
+          .then(() => { console.log('updated', name); res.status(200).send('updated from latest commit'); })
+          .catch(error => { handleError(error); res.status(500).send(error) })
+
+      } else {
+        res.status(500).send('commit isnt to trigger branch')
+      }
     }
-  } else {
 
-    if (isValidPush(branch, deploy.trigger)) {
-
-      console.log('pulling and restarting', name)
-
-      run(deploy.path, `${deploy.stop} && git pull && ${deploy.install} && ${deploy.start}`)
-        .then(() => { console.log('updated', name); res.status(200).send('updated from latest commit'); })
-        .catch(error => { handleError(error); res.status(500).send(error) })
-
-    } else {
-      res.status(500).send('commit isnt to trigger branch')
-    }
   }
-
 
 })
 
